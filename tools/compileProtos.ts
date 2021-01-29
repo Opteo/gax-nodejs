@@ -241,6 +241,7 @@ async function compileProtos(
     path.join(__dirname, '..', '..', 'protos'),
     '-o',
     jsonOutput,
+    '--keep-case',
   ];
   pbjsArgs4JSON.push(...protos);
   await pbjsMain(pbjsArgs4JSON);
@@ -258,6 +259,7 @@ async function compileProtos(
     path.join(__dirname, '..', '..', 'protos'),
     '-o',
     jsOutput,
+    '--keep-case',
   ];
   pbjsArgs4js.push(...protos);
   await pbjsMain(pbjsArgs4js);
