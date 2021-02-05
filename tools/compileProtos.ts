@@ -246,6 +246,7 @@ async function compileProtos(
     '--force-number',
   ];
   pbjsArgs4JSON.push(...protos);
+  console.log('compiling protos with args', pbjsArgs4JSON);
   await pbjsMain(pbjsArgs4JSON);
 
   // generate protos/protos.js from protos.json
@@ -266,6 +267,7 @@ async function compileProtos(
     '--force-number',
   ];
   pbjsArgs4js.push(...protos);
+  console.log('compiling protos with args', pbjsArgs4js);
   await pbjsMain(pbjsArgs4js);
 
   let jsResult = (await readFile(jsOutput)).toString();
