@@ -242,6 +242,8 @@ async function compileProtos(
     '-o',
     jsonOutput,
     '--keep-case',
+    '--no-beautify',
+    '--force-number',
   ];
   pbjsArgs4JSON.push(...protos);
   await pbjsMain(pbjsArgs4JSON);
@@ -260,6 +262,8 @@ async function compileProtos(
     '-o',
     jsOutput,
     '--keep-case',
+    '--no-beautify',
+    '--force-number',
   ];
   pbjsArgs4js.push(...protos);
   await pbjsMain(pbjsArgs4js);
