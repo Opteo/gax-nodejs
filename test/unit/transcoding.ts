@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+/* eslint-disable @typescript-eslint/ban-ts-ignore */
+
 import {describe, it} from 'mocha';
 import {RequestType} from '../../src/apitypes';
 import {
@@ -28,10 +30,12 @@ import {
   deepCopy,
   match,
   buildQueryStringComponents,
-  requestChangeCase,
+  requestChangeCaseAndCleanup,
 } from '../../src/transcoding';
 import * as assert from 'assert';
 import {camelToSnakeCase, snakeToCamelCase} from '../../src/util';
+import * as protobuf from 'protobufjs';
+import {testMessageJson} from '../fixtures/fallbackOptional';
 
 describe('gRPC to HTTP transcoding', () => {
   const parsedOptions: ParsedOptionsType = [
@@ -54,8 +58,7 @@ describe('gRPC to HTTP transcoding', () => {
             get: '/v3/{parent=get/*}/{field=*}/supportedLanguages',
           },
           {
-            get:
-              '/v3/{parent=projects/*}/{field=fields/*}/{path=**}/supportedLanguages',
+            get: '/v3/{parent=projects/*}/{field=fields/*}/{path=**}/supportedLanguages',
           },
           {
             post: '/v3/a/{snake_case_first=*}',
@@ -180,6 +183,28 @@ describe('gRPC to HTTP transcoding', () => {
       transcode({unknownField: 'project'}, parsedOptions),
       undefined
     );
+  });
+
+  it('transcode should ignore inherited properties', () => {
+    // In this test we emulate protobuf object that has inherited circular
+    // references in the prototype. This is supposed to be a pure JS code
+    // so some ts-ignores are expected.
+    const Request = function () {
+      // @ts-ignore
+      this.parent = 'projects/a/locations/b';
+      // @ts-ignore
+      return this;
+    };
+    Request.prototype.circular = {};
+    Request.prototype.circular.field = Request.prototype.circular;
+    // @ts-ignore
+    const request = new Request();
+    assert.deepStrictEqual(transcode(request, parsedOptions), {
+      httpMethod: 'get',
+      url: '/v3/projects/a/locations/b/supportedLanguages',
+      queryString: '',
+      data: '',
+    });
   });
 
   // Tests for helper functions
@@ -433,7 +458,7 @@ describe('gRPC to HTTP transcoding', () => {
     );
   });
 
-  it('requestChangeCase', () => {
+  it('requestChangeCaseAndCleanup', () => {
     const request: RequestType = {
       field: 'value',
       listField: [
@@ -473,12 +498,146 @@ describe('gRPC to HTTP transcoding', () => {
       },
     };
     assert.deepEqual(
-      requestChangeCase(request, camelToSnakeCase),
+      requestChangeCaseAndCleanup(request, camelToSnakeCase),
       expectedSnakeCase
     );
     assert.deepEqual(
-      requestChangeCase(expectedSnakeCase, snakeToCamelCase),
+      requestChangeCaseAndCleanup(expectedSnakeCase, snakeToCamelCase),
       request
     );
+  });
+});
+
+describe('validate proto3 field with default value', () => {
+  const root = protobuf.Root.fromJSON(testMessageJson);
+  const testMessageFields = root.lookupType('TestMessage').fields;
+
+  // should we throw error?
+  it('should required field if a field has both require annotation and optional', () => {
+    const badTestMessageFields = root.lookupType('TestMessage').fields;
+    const request: RequestType = {
+      projectId: 'test-project',
+      content: 'test-content',
+    };
+    const parsedOptions: ParsedOptionsType = [
+      {
+        '(google.api.http)': {
+          post: 'projects/{project_id}/contents/{content}',
+          body: '*',
+        },
+      },
+      {
+        '(google.api.method_signature)': 'project_id, content',
+      },
+    ];
+    const transcoded = transcode(request, parsedOptions, badTestMessageFields);
+    assert.deepStrictEqual(
+      transcoded?.url,
+      'projects/test-project/contents/test-content'
+    );
+  });
+  it('should throw error if required field has not been setted', () => {
+    const requests: RequestType[] = [
+      {
+        projectId: 'test-project',
+        content: 'undefined',
+      },
+      {
+        projectId: 'test-project',
+      },
+    ];
+    const parsedOptions: ParsedOptionsType = [
+      {
+        '(google.api.http)': {
+          post: 'projects/{project_id}',
+          body: '*',
+        },
+      },
+      {
+        '(google.api.method_signature)': 'project_id, content',
+      },
+    ];
+    for (const request of requests) {
+      assert.throws(
+        () => transcode(request, parsedOptions, testMessageFields),
+        Error
+      );
+    }
+  });
+  it('when body="*", all required field should emitted in body', () => {
+    const request: RequestType = {
+      projectId: 'test-project',
+      content: 'test-content',
+    };
+    const parsedOptions: ParsedOptionsType = [
+      {
+        '(google.api.http)': {
+          post: 'projects/{project_id}',
+          body: '*',
+        },
+      },
+    ];
+    const transcoded = transcode(request, parsedOptions, testMessageFields);
+    assert.deepStrictEqual(transcoded?.url, 'projects/test-project');
+    assert.deepStrictEqual(transcoded?.data, {content: 'test-content'});
+  });
+  it('when body="*", unset optional field should remove from body', () => {
+    const requests: RequestType[] = [
+      {
+        projectId: 'test-project',
+        content: 'test-content',
+        optionalValue: 'undefined',
+      },
+      {
+        projectId: 'test-project',
+        content: 'test-content',
+      },
+    ];
+    const parsedOptions: ParsedOptionsType = [
+      {
+        '(google.api.http)': {
+          post: 'projects/{project_id}/contents/{content}',
+          body: '*',
+        },
+      },
+    ];
+    for (const request of requests) {
+      const transcoded = transcode(request, parsedOptions, testMessageFields);
+      assert.deepStrictEqual(
+        transcoded?.url,
+        'projects/test-project/contents/test-content'
+      );
+      assert.deepStrictEqual(transcoded?.data, {});
+    }
+  });
+  it('unset optional fields should not appear in query params', () => {
+    const requests: RequestType[] = [
+      {
+        projectId: 'test-project',
+        content: 'test-content',
+        optionalValue: 'undefined',
+      },
+      {
+        projectId: 'test-project',
+        content: 'test-content',
+      },
+    ];
+    const parsedOptions: ParsedOptionsType = [
+      {
+        '(google.api.http)': {
+          post: 'projects/{project_id}',
+          body: 'content',
+        },
+      },
+      {
+        '(google.api.method_signature)': 'project_id, content',
+      },
+    ];
+    for (const request of requests) {
+      const transcoded = transcode(request, parsedOptions, testMessageFields);
+      assert.deepStrictEqual(transcoded?.url, 'projects/test-project');
+      assert.deepStrictEqual(transcoded?.data, 'test-content');
+      assert.deepStrictEqual(transcoded.queryString, '');
+    }
   });
 });

@@ -16,7 +16,6 @@
 
 import {GoogleAuth, OAuth2Client} from 'google-auth-library';
 import {ProjectIdCallback} from 'google-auth-library/build/src/auth/googleauth';
-import * as path from 'path';
 import {ClientOptions, Callback} from './clientInterface';
 
 import {GaxCall, ResultTuple, RequestType} from './apitypes';
@@ -29,6 +28,7 @@ import * as protos from '../protos/operations';
 import configData = require('./operations_client_config.json');
 import {Transform} from 'stream';
 import {CancellablePromise} from './call';
+import protoJson = require('../protos/operations.json');
 
 export const SERVICE_ADDRESS = 'longrunning.googleapis.com';
 const version = require('../../package.json').version;
@@ -127,10 +127,11 @@ export class OperationsClient {
 
     for (const methodName of operationsStubMethods) {
       const innerCallPromise = operationsStub.then(
-        stub => (...args: Array<{}>) => {
-          const func = stub[methodName];
-          return func.apply(stub, args);
-        },
+        stub =>
+          (...args: Array<{}>) => {
+            const func = stub[methodName];
+            return func.apply(stub, args);
+          },
         err => () => {
           throw err;
         }
@@ -223,7 +224,7 @@ export class OperationsClient {
   ): Promise<[protos.google.longrunning.Operation]> {
     let options: gax.CallOptions;
     if (optionsOrCallback instanceof Function && callback === undefined) {
-      callback = (optionsOrCallback as unknown) as Callback<
+      callback = optionsOrCallback as unknown as Callback<
         protos.google.longrunning.Operation,
         protos.google.longrunning.GetOperationRequest,
         {} | null | undefined
@@ -331,7 +332,7 @@ export class OperationsClient {
   ): Promise<protos.google.longrunning.ListOperationsResponse> {
     let options: gax.CallOptions;
     if (optionsOrCallback instanceof Function && callback === undefined) {
-      callback = (optionsOrCallback as unknown) as Callback<
+      callback = optionsOrCallback as unknown as Callback<
         protos.google.longrunning.ListOperationsResponse,
         protos.google.longrunning.ListOperationsRequest,
         {} | null | undefined
@@ -431,7 +432,7 @@ export class OperationsClient {
     const callSettings = new gax.CallSettings(options);
     return this.descriptor.listOperations.asyncIterate(
       this.innerApiCalls.listOperations as GaxCall,
-      (request as unknown) as RequestType,
+      request as unknown as RequestType,
       callSettings
     ) as AsyncIterable<protos.google.longrunning.ListOperationsResponse>;
   }
@@ -483,7 +484,7 @@ export class OperationsClient {
   ): Promise<protos.google.protobuf.Empty> {
     let options: gax.CallOptions;
     if (optionsOrCallback instanceof Function && callback === undefined) {
-      callback = (optionsOrCallback as unknown) as Callback<
+      callback = optionsOrCallback as unknown as Callback<
         protos.google.longrunning.CancelOperationRequest,
         protos.google.protobuf.Empty,
         {} | null | undefined
@@ -538,7 +539,7 @@ export class OperationsClient {
   ): Promise<protos.google.protobuf.Empty> {
     let options: gax.CallOptions;
     if (optionsOrCallback instanceof Function && callback === undefined) {
-      callback = (optionsOrCallback as unknown) as Callback<
+      callback = optionsOrCallback as unknown as Callback<
         protos.google.protobuf.Empty,
         protos.google.longrunning.DeleteOperationRequest,
         {} | null | undefined
@@ -562,17 +563,7 @@ export class OperationsClientBuilder {
    */
   constructor(gaxGrpc: GrpcClient | FallbackGrpcClient) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let operationsProtos: any; // loaded protos have any type
-    if (gaxGrpc.fallback) {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const protoJson = require('../../protos/operations.json');
-      operationsProtos = gaxGrpc.loadProto(protoJson);
-    } else {
-      operationsProtos = gaxGrpc.loadProto(
-        path.join(__dirname, '..', '..', 'protos', 'operations.json')
-      );
-      Object.assign(this, operationsProtos.google.longrunning);
-    }
+    const operationsProtos = gaxGrpc.loadProtoJSON(protoJson);
 
     /**
      * Build a new instance of {@link OperationsClient}.
